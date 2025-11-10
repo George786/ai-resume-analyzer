@@ -1,55 +1,74 @@
-import {Link, useNavigate, useParams} from "react-router";
-import {usePuterStore} from "~/lib/puter";
-import {useEffect, useState} from "react";
-import Summary from "~/components/Summary";
-import ATS from "~/components/ATS";
-import Details from "~/components/Details";
+import { Link, useNavigate, useParams } from 'react-router'
+import { usePuterStore } from '~/lib/puter'
+import { useEffect, useState } from 'react'
+import Summary from '~/components/Summary'
+import ATS from '~/components/ATS'
+import Details from '~/components/Details'
 
-export  const  meta = () => ([
-    {title: 'Resumind | Review'},
+export const meta = () => [
+    { title: 'Resumind | Review' },
     { name: 'description', content: 'Detailed overview of your resume' },
-])
-
+]
 
 const Resume = () => {
-    const { auth, isLoading, fs, kv } = usePuterStore();
-    const { id } = useParams();
-    const [imageUrl, setImageUrl] = useState('');
-    const [resumeUrl, setResumeUrl] = useState('');
-    const [feedback, setFeedback] = useState<Feedback | null>(null);
-    const navigate = useNavigate();
+    const { auth, isLoading, fs, kv } = usePuterStore()
+    const { id } = useParams()
+    const [imageUrl, setImageUrl] = useState('')
+    const [resumeUrl, setResumeUrl] = useState('')
+    const [feedback, setFeedback] = useState<Feedback | null>(null)
+    const navigate = useNavigate()
 
     useEffect(() => {
-        if(!isLoading && !auth.isAuthenticated) navigate(`/auth?next=/resume/${id}`);
+        if (!isLoading && !auth.isAuthenticated)
+            navigate(`/auth?next=/resume/${id}`)
     }, [isLoading])
 
     useEffect(() => {
-        const loadResume = async  () => {
-          const resume = await  kv.get(`resume:${id}`);
+        const loadResume = async () => {
+            try {
+                const resume = await kv.get(`resume:${id}`)
+                if (!resume) {
+                    console.warn(`No resume found for id: ${id}`)
+                    return
+                }
 
-          if (!resume) return;
+                const data = JSON.parse(resume)
+                console.log('Loaded resume data:', data)
 
-          const data = JSON.parse(resume);
+                // Load PDF
+                if (!data.resumePath) {
+                    console.warn('Resume path missing')
+                } else {
+                    const resumeBlob = await fs.read(data.resumePath)
+                    if (!resumeBlob) {
+                        console.warn('Failed to read resume file:', data.resumePath)
+                    } else {
+                        const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' })
+                        setResumeUrl(URL.createObjectURL(pdfBlob))
+                    }
+                }
 
-          const resumeBlob = await fs.read(data.resumePath);
-          if (!resumeBlob) return;
+                // Load Image
+                if (!data.imagePath) {
+                    console.warn('Image path missing')
+                } else {
+                    const imageBlob = await fs.read(data.imagePath)
+                    if (!imageBlob) {
+                        console.warn('Failed to read image file:', data.imagePath)
+                    } else {
+                        setImageUrl(URL.createObjectURL(imageBlob))
+                    }
+                }
 
-          const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' });
-          const resumeUrl = URL.createObjectURL(pdfBlob);
-          setResumeUrl(resumeUrl);
-
-          const imageBlob = await fs.read(data.imageUrl);
-          if (!imageBlob) return;
-          const imageUrl = URL.createObjectURL(imageBlob);
-          setImageUrl(imageUrl);
-
-          setFeedback(data.feedback);
-            console.log({resumeUrl, imageUrl, feedback: data.feedback});
-
+                setFeedback(data.feedback || null)
+            } catch (err) {
+                console.error('Error loading resume:', err)
+            }
         }
 
-        loadResume();
-    },[id])
+        loadResume()
+    }, [id])
+
     return (
         <main className="!pt-0">
             <nav className="resume-nav">
@@ -59,13 +78,14 @@ const Resume = () => {
                 </Link>
             </nav>
             <div className="flex flex-row w-full max-lg:flex-col-reverse">
-                <section className="feedback-section bg-[url('/images/bg-small.svg') bg-cover h-[100vh] sticky top-0 items-center justify-center">
-                {imageUrl && resumeUrl  && (
+                <section className="feedback-section bg-[url('/images/bg-small.svg')] bg-cover h-[100vh] sticky top-0 items-center justify-center">
+                    {imageUrl && resumeUrl && (
                         <div className="animate-in fade-in duration-1000 gardient-border max-sm:m-0 h-[90%] max-wxl:h-fit w-fit">
                             <a href={resumeUrl} target="_blank" rel="noopener noreferrer">
-                                <img src={imageUrl}
-                                className="w-full h-full object-contain rounded-2xl"
-                                     title="resume"
+                                <img
+                                    src={imageUrl}
+                                    className="w-full h-full object-contain rounded-2xl"
+                                    title="resume"
                                 />
                             </a>
                         </div>
@@ -87,4 +107,5 @@ const Resume = () => {
         </main>
     )
 }
+
 export default Resume
